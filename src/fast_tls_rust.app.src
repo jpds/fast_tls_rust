@@ -1,0 +1,8 @@
+{application, fast_tls_rust,
+    [{description, "TLS/SSL Rust NIF (rustls) for Erlang/Elixir"},
+     {vsn, "0.1.0"},
+     {modules, []},
+     {registered, []},
+     {applications, [kernel, stdlib, crypto, public_key]},
+     {licenses, ["Apache-2.0"]},
+     {links, []}]}.

@@ -1,0 +1,19 @@
+[package]
+name = "fast_tls_rust"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Rust NIF TLS implementation using rustls for ejabberd"
+
+[lib]
+name = "fast_tls_rust"
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[dependencies]
+rustler = "0.37"
+rustls = { version = "0.23", features = ["ring", "tls12", "std"] }
+rustls-pemfile = "2"
