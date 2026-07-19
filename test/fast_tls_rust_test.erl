@@ -73,6 +73,28 @@ certfile_cache_test() ->
     ?assertEqual(error, fast_tls_rust:get_certfile(<<"example.org">>)),
     ?assertEqual(false, fast_tls_rust:delete_certfile(<<"example.org">>)).
 
+send_iolist_test() ->
+    %% Regression test: ejabberd_http builds response bodies as iolists
+    %% (lists of binaries), not flat binaries. loop_nif's to_send argument
+    %% must be a flat binary, so send/2 needs to flatten first.
+    {LPid, Port} = setup_listener([certificate()]),
+    {ok, Socket} = gen_tcp:connect({127, 0, 0, 1}, Port,
+                                   [binary, {packet, 0}, {active, false},
+                                    {reuseaddr, true}, {nodelay, true}]),
+    {ok, TLSSock} = fast_tls_rust:tcp_to_tls(Socket, [connect]),
+    fast_tls_rust:recv(TLSSock, 0, 100),
+    Iolist = [<<"abc">>, [<<"def">>], <<"ghi">>],
+    ?assertEqual(ok, fast_tls_rust:send(TLSSock, Iolist)),
+    fast_tls_rust:close(TLSSock),
+    LPid ! {stop, self()},
+    receive
+        {received, Msg} ->
+            ?assertEqual(<<"abcdefghi">>, Msg)
+    end,
+    receive
+        {certfile, _} -> ok
+    end.
+
 mislabeled_pkcs8_key_test() ->
     %% Regression test: ejabberd's pkix app can re-armor a PKCS#8 key under
     %% an "RSA PRIVATE KEY" (PKCS#1) PEM tag. Confirm the server can still

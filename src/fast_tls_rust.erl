@@ -296,10 +296,12 @@ finish_handshake(#tlssock{tcpsock = TCPSocket, tlsport = Port}, Timeout) ->
     end,
     OurLoop(<<>>).
 
--spec send(tls_socket(), binary()) ->
+-spec send(tls_socket(), iodata()) ->
     ok | {error, inet:posix() | binary() | timeout}.
 send(Socket, Packet) ->
-    case loop(Socket, Packet, <<>>, <<>>, 0) of
+    % loop_nif's to_send argument must already be a flat binary — callers
+    % (e.g. ejabberd_http's response bodies) commonly pass iolists.
+    case loop(Socket, iolist_to_binary(Packet), <<>>, <<>>, 0) of
         {ok, <<>>} ->
             ok;
         {ok, Data} ->
