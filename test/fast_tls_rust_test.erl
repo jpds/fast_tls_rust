@@ -73,6 +73,12 @@ certfile_cache_test() ->
     ?assertEqual(error, fast_tls_rust:get_certfile(<<"example.org">>)),
     ?assertEqual(false, fast_tls_rust:delete_certfile(<<"example.org">>)).
 
+mislabeled_pkcs8_key_test() ->
+    %% Regression test: ejabberd's pkix app can re-armor a PKCS#8 key under
+    %% an "RSA PRIVATE KEY" (PKCS#1) PEM tag. Confirm the server can still
+    %% load it and complete a handshake.
+    transmission_test_with_opts([{certfile, <<"test/cert_mislabeled_key.pem">>}], []).
+
 clear_cache_test() ->
     ok = fast_tls_rust:add_certfile(<<"test.org">>, <<"test/cert.pem">>),
     ok = fast_tls_rust:clear_cache(),

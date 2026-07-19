@@ -298,9 +298,41 @@ fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>, String> {
 fn load_key(path: &str) -> Result<PrivateKeyDer<'static>, String> {
     let file = File::open(path).map_err(|e| format!("SSL_CTX_use_PrivateKey_file failed: {e}"))?;
     let mut reader = BufReader::new(file);
-    rustls_pemfile::private_key(&mut reader)
-        .map_err(|e| format!("SSL_CTX_use_PrivateKey_file failed: {e}"))?
-        .ok_or_else(|| "SSL_CTX_use_PrivateKey_file failed: no private key found".to_string())
+
+    let mut der_candidates: Vec<Vec<u8>> = Vec::new();
+    for item in rustls_pemfile::read_all(&mut reader) {
+        match item.map_err(|e| format!("SSL_CTX_use_PrivateKey_file failed: {e}"))? {
+            rustls_pemfile::Item::Pkcs1Key(k) => der_candidates.push(k.secret_pkcs1_der().to_vec()),
+            rustls_pemfile::Item::Pkcs8Key(k) => der_candidates.push(k.secret_pkcs8_der().to_vec()),
+            rustls_pemfile::Item::Sec1Key(k) => der_candidates.push(k.secret_sec1_der().to_vec()),
+            _ => {}
+        }
+    }
+
+    if der_candidates.is_empty() {
+        return Err("SSL_CTX_use_PrivateKey_file failed: no private key found".to_string());
+    }
+
+    // ejabberd's pkix app can re-armor a key under the wrong PEM tag, so
+    // try every interpretation rather than trusting the tag.
+    let provider = rustls::crypto::ring::default_provider();
+    for der in &der_candidates {
+        for wrap in [
+            PrivateKeyDer::Pkcs8(der.clone().into()),
+            PrivateKeyDer::Pkcs1(der.clone().into()),
+            PrivateKeyDer::Sec1(der.clone().into()),
+        ] {
+            if provider
+                .key_provider
+                .load_private_key(wrap.clone_key())
+                .is_ok()
+            {
+                return Ok(wrap);
+            }
+        }
+    }
+
+    Err("SSL_CTX_check_private_key failed: unexpected error: failed to parse private key as RSA, ECDSA, or EdDSA".to_string())
 }
 
 fn load_certified_key(certfile: &str, keyfile: &str) -> Result<CertifiedKey, String> {
